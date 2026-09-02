@@ -6,8 +6,12 @@
 
 import argparse
 import csv
+import random
 import time
 from pathlib import Path
+
+import numpy as np
+import torch
 
 from agent import Agent
 from game import SnakeGame
@@ -15,11 +19,17 @@ from game import SnakeGame
 ROOT = Path(__file__).parent
 
 
-def train(games, render, out):
+def train(games, render, out, seed=None):
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
     agent = Agent()
     game = SnakeGame(render=render)
 
     scores = []
+    saved = False
     started = time.perf_counter()
 
     while agent.n_games < games:
@@ -42,6 +52,7 @@ def train(games, render, out):
         if score > agent.record:
             agent.record = score
             agent.model.save(out)
+            saved = True
 
         if agent.n_games % 25 == 0:
             last = scores[-25:]
@@ -50,6 +61,14 @@ def train(games, render, out):
                 f"mean(last 25) {sum(last) / len(last):5.2f}  "
                 f"record {agent.record:>3}"
             )
+
+    # A short run can end without ever beating a record of zero, and then no
+    # weights are written at all. Save the final network so the run always
+    # produces a file - CI caught this by training five games and finding
+    # nothing on disk.
+    if not saved:
+        agent.model.save(out)
+        print(f"no score beaten in {games} games; saved the final network anyway")
 
     elapsed = time.perf_counter() - started
     print(f"\n{games} games in {elapsed:.1f}s. Record {agent.record}.")
@@ -69,5 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--games", type=int, default=400)
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--out", default="model.pth")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="make a run reproducible")
     args = parser.parse_args()
-    train(args.games, args.render, args.out)
+    train(args.games, args.render, args.out, args.seed)

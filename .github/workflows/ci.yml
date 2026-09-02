@@ -23,9 +23,10 @@ jobs:
 
       # Five games is not training, it is a check that the loop runs end to end and
       # that what gets written to disk is weights rather than - as it once was - a
-      # pickled bound method.
+      # pickled bound method. Seeded, because an unseeded five-game run sometimes
+      # never scores, and this job used to pass or fail on that coin flip.
       - name: Train briefly
-        run: python train.py --games 5 --out ci-model.pth
+        run: python train.py --games 5 --seed 0 --out ci-model.pth
 
       - name: What was saved is a state dict
         run: |
