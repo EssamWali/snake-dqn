@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    name: It trains and it plays
+    runs-on: ubuntu-latest
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+
+      # Five games is not training, it is a check that the loop runs end to end and
+      # that what gets written to disk is weights rather than - as it once was - a
+      # pickled bound method.
+      - name: Train briefly
+        run: python train.py --games 5 --out ci-model.pth
+
+      - name: What was saved is a state dict
+        run: |
+          python - <<'PY'
+          import torch
+          state = torch.load("ci-model.pth", map_location="cpu", weights_only=True)
+          assert isinstance(state, dict), type(state)
+          assert "linear1.weight" in state, sorted(state)
+          print("ok:", sorted(state))
+          PY
+
+      - name: The committed weights still load and play
+        run: python play.py --games 2
+
+      - name: The learning curve still draws
+        run: python plot_scores.py
